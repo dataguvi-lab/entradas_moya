@@ -27,7 +27,7 @@ FB_CHARSET = "WIN1252"
 
 # ============ CONFIG DA IMAGEM ============
 TITULO = "ENTRADAS DE AGOSTO 2025"          # ajuste conforme seu filtro
-ARQUIVO_SAIDA = "entradas_agosto_2025.png"  # caminho/arquivo de saída
+ARQUIVO_SAIDA = "entradas_moya.png"  # caminho/arquivo de saída
 FIGSIZE = (8, 3)                           # largura x altura (polegadas) – ajuste se quiser
 FONTE_TABELA = 9                             # tamanho da fonte da tabela
 logo_path = 'logo_moya.png'
