@@ -314,7 +314,7 @@ if __name__ == "__main__":
                 filtro_vend = f"{filter_text_base} | Vendedor: {nome_legivel}"
 
                 # Nome do arquivo
-                safe_nome = sanitize_filename(nome_legivel) or f"vendedor_{vend_id}"
+                safe_nome = f"{vend_id}"
                 file_out = out_dir / f"rel_{safe_nome}.pdf"
 
                 generate_pdf(str(file_out), dados_vend, filtro_vend)
