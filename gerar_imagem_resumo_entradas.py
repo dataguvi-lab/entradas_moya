@@ -64,8 +64,8 @@ base AS (
     LEFT JOIN ossituacao s    ON s.situacao = o.situacao
     LEFT JOIN vendedores v    ON v.vendedor = o.vendedor
     LEFT JOIN vendedores v2   ON v2.vendedor = t.vendedortmk
-    WHERE EXTRACT(YEAR  FROM o.abertura) = EXTRACT(YEAR FROM CURRENT_DATE)
-      AND EXTRACT(MONTH FROM o.abertura) = LPAD(EXTRACT(MONTH FROM CURRENT_DATE), 2, '0')
+    WHERE EXTRACT(YEAR  FROM o.abertura) = 2025-- EXTRACT(YEAR FROM CURRENT_DATE)
+      AND EXTRACT(MONTH FROM o.abertura) = 08-- LPAD(EXTRACT(MONTH FROM CURRENT_DATE), 2, '0')
 ),
 agg AS (
     SELECT
