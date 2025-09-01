@@ -5,6 +5,7 @@ from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.lib.utils import ImageReader
+from reportlab.platypus import KeepTogether
 from dotenv import load_dotenv
 import fdb
 import os
@@ -139,8 +140,33 @@ def get_data_from_firebird(conn, dt_ini, dt_fim, vendedor=None):
         print(f"Erro ao buscar dados do Firebird: {e}")
     return data
 
+def get_resumo_linha(conn, dt_ini, dt_fim, vendedor=None):
+    """
+    Retorna lista de tuplas (linha, descricao, quantidade) do resumo por linha.
+    """
+    sql = """
+        SELECT P.linha, REPLACE(L.descricao, 'REMESSA RETORNO - ', '') AS descricao, COUNT(E.produto) AS qtde
+          FROM osordem o
+          INNER JOIN cadastro t ON t.codigo = o.cadastro
+          INNER JOIN osequipamentos e ON e.equipamento = o.equipamento
+          INNER JOIN ceprodutos p ON p.produto = e.produto
+          LEFT JOIN celinhas L ON p.linha = L.linha
+          LEFT JOIN ossituacao s ON s.situacao = o.situacao
+          LEFT JOIN vendedores v ON v.vendedor = o.vendedor
+          LEFT JOIN vendedores v2 ON v2.vendedor = t.vendedortmk
+         WHERE o.Abertura BETWEEN ? AND ?
+    """
+    params = [dt_ini, dt_fim]
+    if vendedor is not None:
+        sql += " AND o.vendedor = ?"
+        params.append(vendedor)
+    sql += " GROUP BY P.linha, L.descricao ORDER BY P.linha, L.descricao"
+    cur = conn.cursor()
+    cur.execute(sql, tuple(params))
+    return cur.fetchall()  # [(linha, descricao, qtde), ...]
 
-def generate_pdf(filename, data, filter_text):
+
+def generate_pdf(filename, data, filter_text, resumo_linha=None):
     # Margens maiores no topo/rodapé para não colidir com cabeçalho/rodapé
     doc = SimpleDocTemplate(
         filename,
@@ -244,6 +270,34 @@ def generate_pdf(filename, data, filter_text):
     story.append(Spacer(1, 8))
     story.append(Paragraph(f"Sub-Total (Quantidade de motores): {len(data)}",
                            ParagraphStyle(name="SubTotal", fontName="Helvetica-Bold", fontSize=9, alignment=2)))
+    if resumo_linha:
+        story.append(Spacer(1, 16))
+        # Agrupe o título e a tabela juntos no KeepTogether
+        resumo_title = Paragraph(
+            "Resumo por Linha",
+            ParagraphStyle(name="ResumoTitle", fontName="Helvetica-Bold", fontSize=10, alignment=0)
+        )
+        resumo_headers = ["Linha", "Descrição", "Qtde"]
+        resumo_data = [[Paragraph(h, styles["Heading6"]) for h in resumo_headers]]
+        for linha, descricao, qtde in resumo_linha:
+            resumo_data.append([
+                Paragraph(str(linha), styles["BodyText"]),
+                Paragraph(str(descricao), styles["BodyText"]),
+                Paragraph(str(qtde), styles["BodyText"]),
+            ])
+        resumo_table = Table(resumo_data, colWidths=[60, 200, 40])
+        resumo_table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#e0e0e0")),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("ALIGN", (2, 1), (2, -1), "RIGHT"),
+            ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#CCCCCC")),
+            ("LEFTPADDING", (0, 0), (-1, -1), 3),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 3),
+            ("TOPPADDING", (0, 0), (-1, -1), 2),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+        ]))
+        # Inclua o título e a tabela juntos no KeepTogether
+        story.append(KeepTogether([resumo_title, resumo_table]))
 
     # Cabeçalho/rodapé em todas as páginas
     hf = make_header_footer("Relatórios de Entradas de Motores", filter_text)
@@ -287,8 +341,9 @@ if __name__ == "__main__":
 
         # (Opcional) Gera o PDF geral (tudo no período)
         data_all = get_data_from_firebird(conn, start_date, end_date, vendedor=None)
+        resumo_all = get_resumo_linha(conn, start_date, end_date, vendedor=None)
         if data_all:
-            generate_pdf(str(out_dir / "rel_GERAL.pdf"), data_all, filter_text_base)
+            generate_pdf(str(out_dir / "rel_GERAL.pdf"), data_all, filter_text_base, resumo_linha=resumo_all)
             print("PDF geral gerado:", out_dir / "rel_GERAL.pdf")
         else:
             print("Nenhum dado encontrado para o PDF GERAL.")
@@ -304,20 +359,18 @@ if __name__ == "__main__":
                     continue
 
                 dados_vend = get_data_from_firebird(conn, start_date, end_date, vendedor=vend_id)
+                resumo_vend = get_resumo_linha(conn, start_date, end_date, vendedor=vend_id)
                 if not dados_vend:
-                    # Pode ocorrer se o vendedor só tinha OS fora dos joins padrões, então seguimos
                     print(f"Sem dados para vendedor {vend_id} ({vend_nome}).")
                     continue
 
-                # Ajusta filtro com identificação do vendedor
                 nome_legivel = f"{vend_id} - {vend_nome}".strip(" -")
                 filtro_vend = f"{filter_text_base} | Vendedor: {nome_legivel}"
 
-                # Nome do arquivo
                 safe_nome = f"{vend_id}"
                 file_out = out_dir / f"rel_{safe_nome}.pdf"
 
-                generate_pdf(str(file_out), dados_vend, filtro_vend)
+                generate_pdf(str(file_out), dados_vend, filtro_vend, resumo_linha=resumo_vend)
                 print("PDF gerado:", file_out)
 
     except Exception as e:

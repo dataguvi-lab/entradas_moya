@@ -25,8 +25,12 @@ FB_USER = os.getenv("DT_USER")
 FB_PASSWORD = os.getenv("DT_PASSWORD")
 FB_CHARSET = "WIN1252"
 
+locale.setlocale(locale.LC_TIME, "pt_BR.UTF-8")
+mes_atual = datetime.now().strftime("%B").upper()
+ano_atual = datetime.now().year
+
 # ============ CONFIG DA IMAGEM ============
-TITULO = "ENTRADAS DE AGOSTO 2025"          # ajuste conforme seu filtro
+TITULO = f"ENTRADAS DE {mes_atual} {ano_atual}"          # ajuste conforme seu filtro
 ARQUIVO_SAIDA = "entradas_moya.png"  # caminho/arquivo de saída
 FIGSIZE = (8, 3)                           # largura x altura (polegadas) – ajuste se quiser
 FONTE_TABELA = 9                             # tamanho da fonte da tabela
@@ -60,8 +64,8 @@ base AS (
     LEFT JOIN ossituacao s    ON s.situacao = o.situacao
     LEFT JOIN vendedores v    ON v.vendedor = o.vendedor
     LEFT JOIN vendedores v2   ON v2.vendedor = t.vendedortmk
-    WHERE EXTRACT(YEAR  FROM o.abertura) = 2025
-      AND EXTRACT(MONTH FROM o.abertura) = 08
+    WHERE EXTRACT(YEAR  FROM o.abertura) = EXTRACT(YEAR FROM CURRENT_DATE)
+      AND EXTRACT(MONTH FROM o.abertura) = LPAD(EXTRACT(MONTH FROM CURRENT_DATE), 2, '0')
 ),
 agg AS (
     SELECT
