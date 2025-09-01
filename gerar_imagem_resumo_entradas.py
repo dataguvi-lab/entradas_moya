@@ -30,7 +30,7 @@ mes_atual = datetime.now().strftime("%B").upper()
 ano_atual = datetime.now().year
 
 # ============ CONFIG DA IMAGEM ============
-TITULO = f"ENTRADAS DE {mes_atual} {ano_atual}"          # ajuste conforme seu filtro
+TITULO = f"ENTRADAS DE AGOSTO 2025"#{mes_atual} {ano_atual}"          # ajuste conforme seu filtro
 ARQUIVO_SAIDA = "entradas_moya.png"  # caminho/arquivo de saída
 FIGSIZE = (8, 3)                           # largura x altura (polegadas) – ajuste se quiser
 FONTE_TABELA = 9                             # tamanho da fonte da tabela
@@ -44,11 +44,16 @@ META_BG = "#1E3A8A"
 # ============ SUA QUERY ============
 SQL = """
 WITH metas_linha AS (
-    SELECT 'MOTOR EMP CC'                    AS descricao, 330 AS meta FROM rdb$database
-    UNION ALL SELECT 'MOTOR PARTIDA',            470            FROM rdb$database
-    UNION ALL SELECT 'MOTOR EMP CA',                     160            FROM rdb$database
-    UNION ALL SELECT 'TRANSMISSÃO',                     70            FROM rdb$database
-    UNION ALL SELECT 'MOTOR IND CA ACIMA 5CV',                     70            FROM rdb$database
+    SELECT 'MOTOR EMP CC' AS descricao, 330 AS meta FROM rdb$database
+    UNION ALL SELECT 'MOTOR PARTIDA', 470 FROM rdb$database
+    UNION ALL SELECT 'MOTOR EMP CA', 160 FROM rdb$database
+    UNION ALL SELECT 'TRANSMISSÃO', 70 FROM rdb$database
+    UNION ALL SELECT 'MOTOR IND CA ACIMA 5CV', 70 FROM rdb$database
+    UNION ALL SELECT 'TRANSFORMADOR', 70 FROM rdb$database
+    UNION ALL SELECT 'MAQ SOLDA', 70 FROM rdb$database
+    UNION ALL SELECT 'CONTROLADOR ELET.', 70 FROM rdb$database
+    UNION ALL SELECT 'FREIO/EMBREAG E PARTES', 70 FROM rdb$database
+    UNION ALL SELECT 'Equipamentos de grande porte', 960 FROM rdb$database  -- 330+470+160 = 960
 ),
 base AS (
     SELECT
@@ -57,50 +62,73 @@ base AS (
         o.abertura AS dt,
         e.produto
     FROM osordem o
-    JOIN cadastro t           ON t.codigo   = o.cadastro
-    JOIN osequipamentos e     ON e.equipamento = o.equipamento
-    JOIN ceprodutos p         ON p.produto  = e.produto
-    LEFT JOIN celinhas l      ON p.linha    = l.linha
-    LEFT JOIN ossituacao s    ON s.situacao = o.situacao
-    LEFT JOIN vendedores v    ON v.vendedor = o.vendedor
-    LEFT JOIN vendedores v2   ON v2.vendedor = t.vendedortmk
-    WHERE EXTRACT(YEAR  FROM o.abertura) = 2025-- EXTRACT(YEAR FROM CURRENT_DATE)
-      AND EXTRACT(MONTH FROM o.abertura) = 08-- LPAD(EXTRACT(MONTH FROM CURRENT_DATE), 2, '0')
+    JOIN cadastro t ON t.codigo = o.cadastro
+    JOIN osequipamentos e ON e.equipamento = o.equipamento
+    JOIN ceprodutos p ON p.produto = e.produto
+    LEFT JOIN celinhas l ON p.linha = l.linha
+    LEFT JOIN ossituacao s ON s.situacao = o.situacao
+    LEFT JOIN vendedores v ON v.vendedor = o.vendedor
+    LEFT JOIN vendedores v2 ON v2.vendedor = t.vendedortmk
+    WHERE EXTRACT(YEAR FROM o.abertura) = 2025--EXTRACT(YEAR FROM CURRENT_DATE)
+    AND EXTRACT(MONTH FROM o.abertura) = 08--LPAD(EXTRACT(MONTH FROM CURRENT_DATE), 2, '0')
 ),
 agg AS (
     SELECT
         linha,
         descricao,
-        /* semanas: 1–7, 8–14, 15–21, 22–28, 29–fim */
-        SUM(CASE WHEN EXTRACT(DAY FROM dt) BETWEEN  1 AND  7 THEN 1 ELSE 0 END) AS sem01,
-        SUM(CASE WHEN EXTRACT(DAY FROM dt) BETWEEN  8 AND 14 THEN 1 ELSE 0 END) AS sem02,
+        SUM(CASE WHEN EXTRACT(DAY FROM dt) BETWEEN 1 AND 7 THEN 1 ELSE 0 END) AS sem01,
+        SUM(CASE WHEN EXTRACT(DAY FROM dt) BETWEEN 8 AND 14 THEN 1 ELSE 0 END) AS sem02,
         SUM(CASE WHEN EXTRACT(DAY FROM dt) BETWEEN 15 AND 21 THEN 1 ELSE 0 END) AS sem03,
         SUM(CASE WHEN EXTRACT(DAY FROM dt) BETWEEN 22 AND 28 THEN 1 ELSE 0 END) AS sem04,
-        SUM(CASE WHEN EXTRACT(DAY FROM dt) >= 29                    THEN 1 ELSE 0 END) AS sem05,
+        SUM(CASE WHEN EXTRACT(DAY FROM dt) >= 29 THEN 1 ELSE 0 END) AS sem05,
         COUNT(produto) AS total
     FROM base
     GROUP BY linha, descricao
 )
-SELECT
-    a.linha,
-    a.descricao,
-    a.sem01,
-    a.sem02,
-    a.sem03,
-    a.sem04,
-    a.sem05,
-    a.total,
-    m.meta,
-    /* % = total/meta */
-    CASE WHEN m.meta IS NULL OR m.meta = 0
-         THEN NULL
-         ELSE CAST((a.total * 100.0) / m.meta AS NUMERIC(9,2))
-    END AS perc
-FROM agg a
-LEFT JOIN metas_linha m
-       ON m.descricao = a.descricao
-WHERE a.descricao IN ('MOTOR EMP CA','MOTOR EMP CC','MOTOR IND CA ACIMA 5CV','MOTOR PARTIDA','TRANSMISSÃO')
-ORDER BY a.linha, a.descricao;
+SELECT * FROM (
+    -- Consulta principal com dados individuais
+    SELECT
+        a.linha,
+        CASE
+        	WHEN a.descricao = 'CONTROLADOR ELET.' THEN 'PLACAS ELETRÔNICAS'
+        	WHEN a.descricao = 'FREIO/EMBREAG E PARTES' THEN 'POLIA DE FREIO'
+        	ELSE a.descricao
+        END AS DESCRICAO,
+        --a.descricao,
+        a.sem01,
+        a.sem02,
+        a.sem03,
+        a.sem04,
+        a.sem05,
+        a.total,
+        m.meta,
+        CASE WHEN m.meta IS NULL OR m.meta = 0
+            THEN NULL
+            ELSE CAST((a.total * 100.0) / m.meta AS NUMERIC(9,2))
+        END AS perc
+    FROM agg a
+    LEFT JOIN metas_linha m ON m.descricao = a.descricao
+    WHERE a.descricao IN ('MOTOR EMP CA','MOTOR EMP CC','MOTOR IND CA ACIMA 5CV','MOTOR PARTIDA','TRANSMISSÃO', 'TRANSFORMADOR', 'MAQ SOLDA','CONTROLADOR ELET.', 'FREIO/EMBREAG E PARTES')
+    UNION ALL
+    -- Linha consolidada agrupando múltiplas descrições
+    SELECT
+        'ZZZZZ' as linha,  -- valor que ficará por último na ordenação
+        'EQUIP. DE GRANDE PORTE' as descricao,
+        SUM(a.sem01) as sem01,
+        SUM(a.sem02) as sem02,
+        SUM(a.sem03) as sem03,
+        SUM(a.sem04) as sem04,
+        SUM(a.sem05) as sem05,
+        SUM(a.total) as total,
+        960 as meta,  -- soma das metas: 330+470+160
+        CASE WHEN 960 = 0
+            THEN NULL
+            ELSE CAST((SUM(a.total) * 100.0) / 960 AS NUMERIC(9,2))
+        END AS perc
+    FROM agg a
+    WHERE a.descricao IN ('MOTOR CC ACIMA 20KW','MOTOR TROL-WEG AGUA AR','GERADOR','EQUIPAMENTO LOCOMOTIVA','MOTOR TRANSMISSAO CA','MOTOR IND CA ACIMA 5CV','TRANSFORMADOR','MAQ SOLDA','BOMBA DAGUA')
+    ) resultado
+ORDER BY linha, descricao;
 """
 
 COL_WIDTHS = [0.372, 0.103, 0.100, 0.100, 0.100, 0.100, 0.098, 0.098, 0.098]
