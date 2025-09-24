@@ -127,6 +127,8 @@ def get_data_from_firebird(conn, dt_ini, dt_fim, vendedor=None):
           LEFT JOIN vendedores v ON v.vendedor = o.vendedor
           LEFT JOIN vendedores v2 ON v2.vendedor = t.vendedortmk
          WHERE o.Abertura BETWEEN ? AND ?
+         AND t.nome NOT LIKE '%JCC%'
+         AND t.nome NOT LIKE 'LOG %'
         """
         params = [dt_ini, dt_fim]
         if vendedor is not None:

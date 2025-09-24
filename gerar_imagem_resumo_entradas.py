@@ -1,11 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-Gera uma imagem no estilo 'ENTRADAS DE <MÊS/ANO>' a partir da sua query SQL (Firebird).
-Requisitos:
-  pip install fdb pandas matplotlib
-Atenção: garanta que o fbclient.dll/so esteja acessível no PATH do sistema.
-"""
-
 from dotenv import load_dotenv
 import fdb
 import pandas as pd
@@ -14,6 +6,7 @@ import matplotlib.pyplot as plt
 import os
 from datetime import datetime
 import locale
+from git import Repo
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 
 load_dotenv()
@@ -43,24 +36,14 @@ META_BG = "#1E3A8A"
 
 # ============ SUA QUERY ============
 SQL = """
-WITH metas_linha AS (
-    SELECT 'MOTOR EMP CC' AS descricao, 330 AS meta FROM rdb$database
-    UNION ALL SELECT 'MOTOR PARTIDA', 470 FROM rdb$database
-    UNION ALL SELECT 'MOTOR EMP CA', 160 FROM rdb$database
-    UNION ALL SELECT 'TRANSMISSÃO', 70 FROM rdb$database
-    UNION ALL SELECT 'MOTOR IND CA ACIMA 5CV', 70 FROM rdb$database
-    UNION ALL SELECT 'TRANSFORMADOR', 70 FROM rdb$database
-    UNION ALL SELECT 'MAQ SOLDA', 70 FROM rdb$database
-    UNION ALL SELECT 'CONTROLADOR ELET.', 70 FROM rdb$database
-    UNION ALL SELECT 'FREIO/EMBREAG E PARTES', 70 FROM rdb$database
-    UNION ALL SELECT 'Equipamentos de grande porte', 960 FROM rdb$database  -- 330+470+160 = 960
-),
-base AS (
+WITH base AS (
     SELECT
         p.linha,
         TRIM(REPLACE(l.descricao, 'REMESSA RETORNO - ', '')) AS descricao,
         o.abertura AS dt,
-        e.produto
+        e.produto,
+        o.filial,
+        t.nome
     FROM osordem o
     JOIN cadastro t ON t.codigo = o.cadastro
     JOIN osequipamentos e ON e.equipamento = o.equipamento
@@ -69,8 +52,10 @@ base AS (
     LEFT JOIN ossituacao s ON s.situacao = o.situacao
     LEFT JOIN vendedores v ON v.vendedor = o.vendedor
     LEFT JOIN vendedores v2 ON v2.vendedor = t.vendedortmk
-    WHERE EXTRACT(YEAR FROM o.abertura) = 2025--EXTRACT(YEAR FROM CURRENT_DATE)
-    AND EXTRACT(MONTH FROM o.abertura) = 08--LPAD(EXTRACT(MONTH FROM CURRENT_DATE), 2, '0')
+    WHERE EXTRACT(YEAR FROM o.abertura) = EXTRACT(YEAR FROM CURRENT_DATE)
+      AND EXTRACT(MONTH FROM o.abertura) = EXTRACT(MONTH FROM CURRENT_DATE)
+      AND t.nome NOT LIKE '%JCC%'
+      AND t.nome NOT LIKE 'LOG P%'
 ),
 agg AS (
     SELECT
@@ -86,48 +71,104 @@ agg AS (
     GROUP BY linha, descricao
 )
 SELECT * FROM (
-    -- Consulta principal com dados individuais
     SELECT
-        a.linha,
-        CASE
-        	WHEN a.descricao = 'CONTROLADOR ELET.' THEN 'PLACAS ELETRÔNICAS'
-        	WHEN a.descricao = 'FREIO/EMBREAG E PARTES' THEN 'POLIA DE FREIO'
-        	ELSE a.descricao
-        END AS DESCRICAO,
-        --a.descricao,
-        a.sem01,
-        a.sem02,
-        a.sem03,
-        a.sem04,
-        a.sem05,
-        a.total,
-        m.meta,
-        CASE WHEN m.meta IS NULL OR m.meta = 0
-            THEN NULL
-            ELSE CAST((a.total * 100.0) / m.meta AS NUMERIC(9,2))
-        END AS perc
-    FROM agg a
-    LEFT JOIN metas_linha m ON m.descricao = a.descricao
-    WHERE a.descricao IN ('MOTOR EMP CA','MOTOR EMP CC','MOTOR IND CA ACIMA 5CV','MOTOR PARTIDA','TRANSMISSÃO', 'TRANSFORMADOR', 'MAQ SOLDA','CONTROLADOR ELET.', 'FREIO/EMBREAG E PARTES')
-    UNION ALL
-    -- Linha consolidada agrupando múltiplas descrições
-    SELECT
-        'ZZZZZ' as linha,  -- valor que ficará por último na ordenação
-        'EQUIP. DE GRANDE PORTE' as descricao,
+        'ZZZZF' as linha,
+        'Equip. de grande porte' as descricao,
         SUM(a.sem01) as sem01,
         SUM(a.sem02) as sem02,
         SUM(a.sem03) as sem03,
         SUM(a.sem04) as sem04,
         SUM(a.sem05) as sem05,
         SUM(a.total) as total,
-        960 as meta,  -- soma das metas: 330+470+160
-        CASE WHEN 960 = 0
-            THEN NULL
-            ELSE CAST((SUM(a.total) * 100.0) / 960 AS NUMERIC(9,2))
-        END AS perc
+        null as meta,
+        null as perc
     FROM agg a
-    WHERE a.descricao IN ('MOTOR CC ACIMA 20KW','MOTOR TROL-WEG AGUA AR','GERADOR','EQUIPAMENTO LOCOMOTIVA','MOTOR TRANSMISSAO CA','MOTOR IND CA ACIMA 5CV','TRANSFORMADOR','MAQ SOLDA','BOMBA DAGUA')
-    ) resultado
+    WHERE linha IN ('RR0139','RR0140','RR0108','RR0131','RR0141','RR0137','RR0148','RR0117')
+    UNION ALL
+    SELECT
+        'ZZZZB' as linha,
+        'Motores Part / Alt.' as descricao,
+        SUM(a.sem01) as sem01,
+        SUM(a.sem02) as sem02,
+        SUM(a.sem03) as sem03,
+        SUM(a.sem04) as sem04,
+        SUM(a.sem05) as sem05,
+        SUM(a.total) as total,
+        470 as meta,
+        CASE WHEN 960 = 0 THEN NULL ELSE CAST((SUM(a.total) * 100.0) / 960 AS NUMERIC(9,2)) END AS perc
+    FROM agg a
+    WHERE linha IN ('RR0100', 'RR0103')
+    UNION ALL
+    SELECT
+        'ZZZZA' as linha,
+        'MOTOR EMP CC' as descricao,
+        SUM(a.sem01) as sem01,
+        SUM(a.sem02) as sem02,
+        SUM(a.sem03) as sem03,
+        SUM(a.sem04) as sem04,
+        SUM(a.sem05) as sem05,
+        SUM(a.total) as total,
+        330 as meta,
+        CASE WHEN 960 = 0 THEN NULL ELSE CAST((SUM(a.total) * 100.0) / 960 AS NUMERIC(9,2)) END AS perc
+    FROM agg a
+    WHERE linha IN ('RR0101')
+    UNION ALL
+    SELECT
+        'ZZZZC' as linha,
+        'MOTOR EMP CA' as descricao,
+        SUM(a.sem01) as sem01,
+        SUM(a.sem02) as sem02,
+        SUM(a.sem03) as sem03,
+        SUM(a.sem04) as sem04,
+        SUM(a.sem05) as sem05,
+        SUM(a.total) as total,
+        160 as meta,
+        CASE WHEN 960 = 0 THEN NULL ELSE CAST((SUM(a.total) * 100.0) / 960 AS NUMERIC(9,2)) END AS perc
+    FROM agg a
+    WHERE linha IN ('RR0102')
+    UNION ALL
+    SELECT
+        'ZZZZD' as linha,
+        'TRANSMISSÃO' as descricao,
+        SUM(a.sem01) as sem01,
+        SUM(a.sem02) as sem02,
+        SUM(a.sem03) as sem03,
+        SUM(a.sem04) as sem04,
+        SUM(a.sem05) as sem05,
+        SUM(a.total) as total,
+        70 as meta,
+        CASE WHEN 960 = 0 THEN NULL ELSE CAST((SUM(a.total) * 100.0) / 960 AS NUMERIC(9,2)) END AS perc
+    FROM agg a
+    WHERE linha IN ('RR0128')
+    UNION ALL
+    SELECT
+        'ZZZZE' as linha,
+        'POLIA DE FREIO' as descricao,
+        SUM(a.sem01) as sem01,
+        SUM(a.sem02) as sem02,
+        SUM(a.sem03) as sem03,
+        SUM(a.sem04) as sem04,
+        SUM(a.sem05) as sem05,
+        SUM(a.total) as total,
+        150 as meta,
+        CASE WHEN 960 = 0 THEN NULL ELSE CAST((SUM(a.total) * 100.0) / 960 AS NUMERIC(9,2)) END AS perc
+    FROM agg a
+    WHERE linha IN ('RR0115')
+    UNION ALL
+    SELECT
+        'ZZZZG' as linha,
+        'PLACAS ELETRÔNICAS' as descricao,
+        SUM(a.sem01) as sem01,
+        SUM(a.sem02) as sem02,
+        SUM(a.sem03) as sem03,
+        SUM(a.sem04) as sem04,
+        SUM(a.sem05) as sem05,
+        SUM(a.total) as total,
+        161 as meta,
+        CASE WHEN 960 = 0 THEN NULL ELSE CAST((SUM(a.total) * 100.0) / 960 AS NUMERIC(9,2)) END AS perc
+    FROM agg a
+    WHERE linha IN ('RR0105')
+) resultado
 ORDER BY linha, descricao;
 """
 
@@ -332,6 +373,20 @@ def main():
             logo_path="logo_moya.png"
         )
         print(f"Imagem gerada: {outfile}")
+
+        repo_dir = '/home/ubuntu/repositorios/moya_ordens'
+
+        # Bloco do Git (mantido como no original)
+        try:
+            # Descomente as linhas abaixo para usar o Git
+            repo = Repo(repo_dir)
+            repo.git.add('entradas_moya.png')
+            repo.index.commit('Atualização entradas MOYA')
+            origin = repo.remote(name='origin')
+            origin.push()
+            print("Arquivo enviado para o GitHub com sucesso!")
+        except Exception as e:
+            print(f"Erro ao enviar para o GitHub: {e}")
 
     finally:
         try:
