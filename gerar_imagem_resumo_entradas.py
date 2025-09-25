@@ -17,9 +17,21 @@ FB_DATABASE = os.getenv("DT_DATABASE")
 FB_USER = os.getenv("DT_USER")
 FB_PASSWORD = os.getenv("DT_PASSWORD")
 FB_CHARSET = "WIN1252"
-
-locale.setlocale(locale.LC_TIME, "pt_BR.UTF-8")
-mes_atual = datetime.now().strftime("%B").upper()
+MESES = {
+    1: "JANEIRO",
+    2: "FEVEREIRO",
+    3: "MARÇO",
+    4: "ABRIL",
+    5: "MAIO",
+    6: "JUNHO",
+    7: "JULHO",
+    8: "AGOSTO",
+    9: "SETEMBRO",
+    10: "OUTUBRO",
+    11: "NOVEMBRO",
+    12: "DEZEMBRO"
+}
+mes_atual = MESES[datetime.now().month]
 ano_atual = datetime.now().year
 
 # ============ CONFIG DA IMAGEM ============
@@ -374,7 +386,7 @@ def main():
         )
         print(f"Imagem gerada: {outfile}")
 
-        repo_dir = '/home/ubuntu/repositorios/moya_ordens'
+        repo_dir = '/home/ubuntu/repositorios/entradas_moya'
 
         # Bloco do Git (mantido como no original)
         try:
