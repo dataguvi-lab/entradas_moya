@@ -23,7 +23,7 @@ mes_atual = datetime.now().strftime("%B").upper()
 ano_atual = datetime.now().year
 
 # ============ CONFIG DA IMAGEM ============
-TITULO = f"ENTRADAS DE AGOSTO 2025"#{mes_atual} {ano_atual}"          # ajuste conforme seu filtro
+TITULO = f"ENTRADAS DE {mes_atual} {ano_atual}"          # ajuste conforme seu filtro
 ARQUIVO_SAIDA = "entradas_moya.png"  # caminho/arquivo de saída
 FIGSIZE = (8, 3)                           # largura x altura (polegadas) – ajuste se quiser
 FONTE_TABELA = 9                             # tamanho da fonte da tabela
