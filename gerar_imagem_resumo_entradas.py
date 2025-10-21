@@ -8,8 +8,13 @@ from datetime import datetime
 import locale
 from git import Repo
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
+from vpn_manager import start_vpn, stop_vpn
+import atexit
 
 load_dotenv()
+
+# Registra a função para desligar a VPN quando o script terminar
+atexit.register(stop_vpn)
 
 # ============ CONFIGURAÇÃO DA CONEXÃO ============
 FB_HOST = os.getenv("DT_HOST")
@@ -346,6 +351,11 @@ def render_entradas_table(
 
 # ============ EXECUÇÃO ============
 def main():
+    # Inicia a VPN antes de conectar ao banco
+    if not start_vpn():
+        print("Erro ao iniciar a VPN. Abortando execução.")
+        return
+
     con = fdb.connect(
         host=FB_HOST,
         database=FB_DATABASE,
